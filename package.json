@@ -1,0 +1,26 @@
+{
+  "name": "tg_bot_shop",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "Reinis R. Vāravs",
+  "license": "UNLICENSED",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "grammy": "^1.46.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "@types/validator": "^13.15.10",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
