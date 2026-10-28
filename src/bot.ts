@@ -18,9 +18,57 @@ export const bot = new Bot(botToken);
 const cartMessageIds = new Map<number, number>();
 const cartFlashTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
+type CartItem = {
+  name: string;
+  quantity: number;
+  line_total: string;
+};
+
+function resetCartMessageTracking(chatId: number) {
+  const existingTimer = cartFlashTimers.get(chatId);
+
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    cartFlashTimers.delete(chatId);
+  }
+
+  cartMessageIds.delete(chatId);
+}
+
+function buildCartMessage(cartItems: CartItem[], showUpdated: boolean) {
+  const cartLines = cartItems
+    .map((item) => {
+      const name = escapeHtml(String(item.name));
+
+      return `<b>${name}</b>
+Quantity: ${item.quantity}
+Price: €${item.line_total}`;
+    })
+    .join("\n\n");
+
+  let cartTotal = 0;
+
+  cartItems.forEach((item) => {
+    cartTotal += Number(item.line_total);
+  });
+
+  const header = showUpdated
+    ? "<b>🛒 Cart: Updated ✅</b>"
+    : "<b>🛒 Cart:</b>";
+  const footer = `<b>Total: €${cartTotal.toFixed(2)}</b>`;
+
+  return header + "\n\n" + cartLines + "\n\n" + footer;
+}
+
+function buildCartKeyboard(orderId: number) {
+  return new InlineKeyboard().text("Order", `checkout:${orderId}`);
+}
+
 const welcomeKeyboard = new InlineKeyboard().text("Continue", "continue"); // Define the Continue btn
 
 bot.command("start", async (ctx) => {
+  resetCartMessageTracking(ctx.chat.id);
+
   await ctx.reply(
     `Welcome to our shop!
 
@@ -32,6 +80,39 @@ Before ordering:
       reply_markup: welcomeKeyboard, // Show the Continue button below this message
     },
   );
+});
+
+bot.command("cart", async (ctx) => {
+  try {
+    if (!ctx.from) {
+      return;
+    }
+
+    const draftOrder = await getOrCreateDraftOrder(ctx.from.id);
+    const orderId = Number(draftOrder.id);
+    const cartItems = await getOrderItems(orderId);
+
+    if (cartItems.length === 0) {
+      await ctx.reply("Your cart is empty.");
+      return;
+    }
+
+    const chatId = ctx.chat.id;
+    const cartMessage = buildCartMessage(cartItems, false);
+    const cartKeyboard = buildCartKeyboard(orderId);
+
+    resetCartMessageTracking(chatId);
+
+    const sentMessage = await ctx.reply(cartMessage, {
+      parse_mode: "HTML",
+      reply_markup: cartKeyboard,
+    });
+
+    cartMessageIds.set(chatId, sentMessage.message_id);
+  } catch (error) {
+    await ctx.reply("Something went wrong.");
+    console.error(error);
+  }
 });
 
 bot.callbackQuery("continue", async (ctx) => {
@@ -59,7 +140,7 @@ Stock: ${product.stock_quantity}
 Price: €${product.price}`;
     });
 
-    const availableMessage = "Available:\n\n" + productLines.join("\n\n");
+    const availableMessage = "<b>Available:</b>\n\n" + productLines.join("\n\n");
 
     const productKeyboard = new InlineKeyboard();
 
@@ -73,6 +154,30 @@ Price: €${product.price}`;
       reply_markup: productKeyboard,
       parse_mode: "HTML",
     });
+
+    const draftOrder = await getOrCreateDraftOrder(ctx.from.id);
+    const orderId = Number(draftOrder.id);
+    const cartItems = await getOrderItems(orderId);
+
+    if (cartItems.length > 0) {
+      const chatId = ctx.chatId;
+
+      if (chatId === undefined) {
+        return;
+      }
+
+      const cartMessage = buildCartMessage(cartItems, false);
+      const cartKeyboard = buildCartKeyboard(orderId);
+
+      resetCartMessageTracking(chatId);
+
+      const sentMessage = await ctx.reply(cartMessage, {
+        parse_mode: "HTML",
+        reply_markup: cartKeyboard,
+      });
+
+      cartMessageIds.set(chatId, sentMessage.message_id);
+    }
   } catch (error) {
     await ctx.reply("Something went wrong.");
     console.error(error);
@@ -100,7 +205,6 @@ bot.on("callback_query:data", async (ctx) => {
 
     // add to cart
     const productIdText = data.split(":")[1];
-
     if (!productIdText) {
       await ctx.reply("Invalid product.");
       return;
@@ -109,41 +213,15 @@ bot.on("callback_query:data", async (ctx) => {
     const productId = Number(productIdText);
     const orderId = Number(draftOrder.id);
 
-    const cartKeyboard = new InlineKeyboard().text(
-      "Order",
-      `checkout:${orderId}`,
-    );
+    const cartKeyboard = buildCartKeyboard(orderId);
 
     await addProductToOrder(orderId, productId);
 
     // reply with new cart
     const updatedCart = await getOrderItems(orderId);
 
-    const cartLines = updatedCart
-      .map((item) => {
-        const name = escapeHtml(item.name);
-
-        return `<b>${name}</b>
-Quantity: ${item.quantity}
-Price: €${item.line_total}`;
-      })
-      .join("\n\n");
-
-    let cartTotal = 0;
-
-    updatedCart.forEach((item) => {
-      cartTotal += Number(item.line_total);
-    });
-
-    const normalHeader = "<b>🛒 Cart:</b>";
-    const updatedHeader = "<b>🛒 Cart: Updated ✅</b>";
-    const footer = `<b>Total: €${cartTotal.toFixed(2)}</b>`;
-    const separator = "\n\n";
-
-    const normalCartMessage =
-      normalHeader + separator + cartLines + separator + footer;
-    const updatedCartMessage =
-      updatedHeader + separator + cartLines + separator + footer;
+    const normalCartMessage = buildCartMessage(updatedCart, false);
+    const updatedCartMessage = buildCartMessage(updatedCart, true);
 
     const chatId = ctx.chatId;
 
@@ -151,28 +229,32 @@ Price: €${item.line_total}`;
       return;
     }
 
-    const existingMessageId = cartMessageIds.get(chatId);
+    let cartMessageId = cartMessageIds.get(chatId);
     const existingTimer = cartFlashTimers.get(chatId);
 
     if (existingTimer) {
       clearTimeout(existingTimer);
     }
 
-    let cartMessageId: number;
+    if (cartMessageId) {
+      try {
+        await ctx.api.editMessageText(
+          chatId,
+          cartMessageId,
+          updatedCartMessage,
+          {
+            parse_mode: "HTML",
+            reply_markup: cartKeyboard,
+          },
+        );
+      } catch {
+        // The previously saved cart message may have been deleted.
+        cartMessageIds.delete(chatId);
+        cartMessageId = undefined;
+      }
+    }
 
-    if (existingMessageId) {
-      await ctx.api.editMessageText(
-        chatId,
-        existingMessageId,
-        updatedCartMessage,
-        {
-          parse_mode: "HTML",
-          reply_markup: cartKeyboard,
-        },
-      );
-
-      cartMessageId = existingMessageId;
-    } else {
+    if (!cartMessageId) {
       const sentMessage = await ctx.reply(updatedCartMessage, {
         parse_mode: "HTML",
         reply_markup: cartKeyboard,
@@ -182,14 +264,20 @@ Price: €${item.line_total}`;
       cartMessageIds.set(chatId, cartMessageId);
     }
 
+    const activeCartMessageId = cartMessageId;
+
     const timer = setTimeout(() => {
       void ctx.api
-        .editMessageText(chatId, cartMessageId, normalCartMessage, {
+        .editMessageText(chatId, activeCartMessageId, normalCartMessage, {
           parse_mode: "HTML",
           reply_markup: cartKeyboard,
         })
         .catch((error) => {
-          console.error("Failed to remove cart update indicator:", error);
+          if (cartMessageIds.get(chatId) === activeCartMessageId) {
+            cartMessageIds.delete(chatId);
+          }
+
+          console.error("Could not edit cart message:", error);
         });
 
       cartFlashTimers.delete(chatId);
