@@ -1,10 +1,10 @@
 {
   "name": "tg_bot_shop",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
