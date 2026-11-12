@@ -12,6 +12,7 @@ a REST API.
 - Private access restricted to one configured Telegram user ID
 - Telegram `/admin` inventory menu
 - Complete admin inventory list, including out-of-stock products
+- Guided Telegram flow for adding inventory products
 - Product catalogue loaded from PostgreSQL
 - Product stock and prices shown in Telegram
 - Existing draft-order recovery for returning customers

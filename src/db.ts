@@ -90,6 +90,22 @@ export async function getInventory() {
   return result.rows;
 }
 
+export async function createInventoryProduct(
+  name: string,
+  category: string | null,
+  price: string,
+  stockQuantity: number,
+) {
+  const result = await pool.query(
+    `INSERT INTO inventory (name, category, price, stock_quantity)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, name, category, price, stock_quantity`,
+    [name, category, price, stockQuantity],
+  );
+
+  return result.rows[0];
+}
+
 export async function getOrCreateDraftOrder(telegramUserId: number) {
   const existingOrder = await pool.query(
     `SELECT *
