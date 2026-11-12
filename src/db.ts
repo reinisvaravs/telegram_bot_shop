@@ -80,6 +80,16 @@ export async function getAvailable() {
   return result.rows;
 }
 
+export async function getInventory() {
+  const result = await pool.query(
+    `SELECT id, name, category, stock_quantity, price, updated_at
+     FROM inventory
+     ORDER BY id`,
+  );
+
+  return result.rows;
+}
+
 export async function getOrCreateDraftOrder(telegramUserId: number) {
   const existingOrder = await pool.query(
     `SELECT *

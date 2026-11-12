@@ -10,6 +10,8 @@ a REST API.
 
 - Welcome message and **Continue** button
 - Private access restricted to one configured Telegram user ID
+- Telegram `/admin` inventory menu
+- Complete admin inventory list, including out-of-stock products
 - Product catalogue loaded from PostgreSQL
 - Product stock and prices shown in Telegram
 - Existing draft-order recovery for returning customers
@@ -41,6 +43,7 @@ src/
 ├── handlers/
 │   ├── cart.ts       # Cart commands and button handlers
 │   ├── catalog.ts    # Product catalogue and Continue button
+│   ├── admin.ts      # Admin menu and inventory controls
 │   └── start.ts      # /start and welcome message
 ├── views/
 │   └── cart-view.ts  # Cart formatting, keyboard, and message editing
