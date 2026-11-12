@@ -155,4 +155,20 @@ export async function getOrderItems(orderId: number) {
   return result.rows;
 }
 
+export async function discardDraftOrder(
+  orderId: number,
+  telegramUserId: number,
+) {
+  const result = await pool.query(
+    `DELETE FROM orders
+     WHERE id = $1
+       AND telegram_user_id = $2
+       AND status = 'draft'
+     RETURNING id`,
+    [orderId, telegramUserId],
+  );
+
+  return result.rows[0];
+}
+
 export default pool;
