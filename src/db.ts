@@ -106,6 +106,47 @@ export async function createInventoryProduct(
   return result.rows[0];
 }
 
+export type EditableInventoryField =
+  | "name"
+  | "category"
+  | "price"
+  | "stock_quantity";
+
+export async function getInventoryProduct(productId: number) {
+  const result = await pool.query(
+    `SELECT id, name, category, price, stock_quantity
+     FROM inventory
+     WHERE id = $1`,
+    [productId],
+  );
+
+  return result.rows[0];
+}
+
+export async function updateInventoryProduct(
+  productId: number,
+  field: EditableInventoryField,
+  value: string | number | null,
+) {
+  const columns: Record<EditableInventoryField, string> = {
+    name: "name",
+    category: "category",
+    price: "price",
+    stock_quantity: "stock_quantity",
+  };
+  const column = columns[field];
+  const result = await pool.query(
+    `UPDATE inventory
+     SET ${column} = $2,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING id, name, category, price, stock_quantity`,
+    [productId, value],
+  );
+
+  return result.rows[0];
+}
+
 export async function getOrCreateDraftOrder(telegramUserId: number) {
   const existingOrder = await pool.query(
     `SELECT *
