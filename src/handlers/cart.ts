@@ -4,6 +4,7 @@ import {
   discardDraftOrder,
   getOrCreateDraftOrder,
   getOrderItems,
+  InventoryStockError,
 } from "../db.js";
 import {
   resetCartMessageTracking,
@@ -112,12 +113,22 @@ export function registerCartHandlers(bot: Bot) {
       const productId = Number(productIdText);
       const orderId = Number(draftOrder.id);
 
+      if (!Number.isSafeInteger(productId)) {
+        await ctx.reply("Invalid product.");
+        return;
+      }
+
       await addProductToOrder(orderId, productId);
 
       const updatedCart = await getOrderItems(orderId);
 
       await updateCartMessage(ctx, orderId, updatedCart);
     } catch (error) {
+      if (error instanceof InventoryStockError) {
+        await ctx.reply(error.message);
+        return;
+      }
+
       await ctx.reply("Something went wrong.");
       console.error(error);
     }

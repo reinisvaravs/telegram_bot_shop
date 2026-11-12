@@ -172,35 +172,66 @@ export async function getOrCreateDraftOrder(telegramUserId: number) {
   return newOrder.rows[0];
 }
 
+export class InventoryStockError extends Error {}
+
 export async function addProductToOrder(orderId: number, productId: number) {
-  const productResult = await pool.query(
-    `SELECT id, price, stock_quantity
-     FROM inventory
-     WHERE id = $1
-       AND stock_quantity > 0`,
-    [productId],
-  );
+  const client = await pool.connect();
 
-  const product = productResult.rows[0];
+  try {
+    await client.query("BEGIN");
 
-  if (!product) {
-    throw new Error("Product not found or out of stock");
+    const productResult = await client.query(
+      `SELECT id, price, stock_quantity
+       FROM inventory
+       WHERE id = $1
+       FOR UPDATE`,
+      [productId],
+    );
+    const product = productResult.rows[0];
+
+    if (!product || product.stock_quantity <= 0) {
+      throw new InventoryStockError("This product is out of stock.");
+    }
+
+    const existingItemResult = await client.query(
+      `SELECT id, quantity
+       FROM order_items
+       WHERE order_id = $1
+         AND product_id = $2
+       FOR UPDATE`,
+      [orderId, productId],
+    );
+    const existingItem = existingItemResult.rows[0];
+
+    if (existingItem && existingItem.quantity >= product.stock_quantity) {
+      throw new InventoryStockError(
+        `Only ${product.stock_quantity} available. Your cart already contains the maximum quantity.`,
+      );
+    }
+
+    const itemResult = existingItem
+      ? await client.query(
+          `UPDATE order_items
+           SET quantity = quantity + 1
+           WHERE id = $1
+           RETURNING *`,
+          [existingItem.id],
+        )
+      : await client.query(
+          `INSERT INTO order_items (order_id, product_id, unit_price)
+           VALUES ($1, $2, $3)
+           RETURNING *`,
+          [orderId, product.id, product.price],
+        );
+
+    await client.query("COMMIT");
+    return itemResult.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const itemResult = await pool.query(
-    `INSERT INTO order_items (
-       order_id,
-       product_id,
-       unit_price
-     )
-     VALUES ($1, $2, $3)
-     ON CONFLICT (order_id, product_id)
-     DO UPDATE SET quantity = order_items.quantity + 1
-     RETURNING *`,
-    [orderId, product.id, product.price],
-  );
-
-  return itemResult.rows[0];
 }
 
 export async function getOrderItems(orderId: number) {

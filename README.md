@@ -16,6 +16,7 @@ a REST API.
 - Telegram controls for editing product details and stock
 - Product catalogue loaded from PostgreSQL
 - Product stock and prices shown in Telegram
+- Transaction-safe cart quantity validation against available stock
 - Existing draft-order recovery for returning customers
 - Add-to-cart buttons
 - Cart totals
@@ -166,15 +167,13 @@ Run `npm run build` before `npm start`.
 - Admin notifications and order approval
 - Order status updates
 - Decreasing or removing individual cart items
-- Preventing cart quantities from exceeding available stock
 - Safely reducing inventory when an order is confirmed
 
 ## Important limitation
 
-The bot currently checks whether a product has stock before adding it, but it
-does not prevent a cart quantity from becoming greater than the available stock.
-Do not use the current checkout/cart implementation for real orders until stock
-validation is added.
+Cart quantities cannot exceed the current stock value. However, stock is not
+reserved or reduced until a real order-confirmation flow is implemented. The
+project should not be used for real orders in its current demo state.
 
 ## License
 
