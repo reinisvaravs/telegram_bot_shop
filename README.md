@@ -9,6 +9,7 @@ a REST API.
 ## Current features
 
 - Welcome message and **Continue** button
+- Private access restricted to one configured Telegram user ID
 - Product catalogue loaded from PostgreSQL
 - Product stock and prices shown in Telegram
 - Existing draft-order recovery for returning customers
@@ -92,6 +93,7 @@ Then fill in `.env`:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
+ADMIN_TELEGRAM_ID=your_numeric_telegram_user_id
 
 DB_HOST=localhost
 DB_PORT=5432
@@ -99,6 +101,9 @@ DB_NAME=postgres
 DB_USER=your_database_user
 DB_PASSWORD=your_database_password
 ```
+
+Only the Telegram account matching `ADMIN_TELEGRAM_ID` can use the bot. Other
+users receive a message explaining that the bot is private.
 
 ### 5. Add inventory
 
