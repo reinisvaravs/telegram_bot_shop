@@ -2,6 +2,7 @@ import { type Context, InlineKeyboard } from "grammy";
 import { escapeHtml } from "../helper.js";
 
 export type CartItem = {
+  product_id: string;
   name: string;
   quantity: number;
   line_total: string;
@@ -46,8 +47,19 @@ Price: €${item.line_total}`;
   return header + "\n\n" + cartLines + "\n\n" + footer;
 }
 
-function buildCartKeyboard(orderId: number) {
-  return new InlineKeyboard()
+function buildCartKeyboard(orderId: number, cartItems: CartItem[]) {
+  const keyboard = new InlineKeyboard();
+
+  for (const item of cartItems) {
+    const shortName = String(item.name).slice(0, 25);
+
+    keyboard
+      .text(`− ${shortName}`, `decrease:${orderId}:${item.product_id}`)
+      .text("Remove", `remove:${orderId}:${item.product_id}`)
+      .row();
+  }
+
+  return keyboard
     .text("Checkout", `checkout:${orderId}`)
     .text("Discard", `discard:${orderId}`);
 }
@@ -64,7 +76,7 @@ export async function sendFreshCartMessage(
   }
 
   const cartMessage = buildCartMessage(cartItems, false);
-  const cartKeyboard = buildCartKeyboard(orderId);
+  const cartKeyboard = buildCartKeyboard(orderId, cartItems);
 
   resetCartMessageTracking(chatId);
 
@@ -87,7 +99,7 @@ export async function updateCartMessage(
     return;
   }
 
-  const cartKeyboard = buildCartKeyboard(orderId);
+  const cartKeyboard = buildCartKeyboard(orderId, cartItems);
   const normalCartMessage = buildCartMessage(cartItems, false);
   const updatedCartMessage = buildCartMessage(cartItems, true);
   const existingTimer = cartFlashTimers.get(chatId);
@@ -145,4 +157,26 @@ export async function updateCartMessage(
   }, 1000);
 
   cartFlashTimers.set(chatId, timer);
+}
+
+export async function showEmptyCartMessage(ctx: Context) {
+  const chatId = ctx.chatId;
+
+  if (chatId === undefined) {
+    return;
+  }
+
+  resetCartMessageTracking(chatId);
+
+  try {
+    await ctx.editMessageText("<b>🛒 Cart:</b>\n\nYour cart is empty.", {
+      parse_mode: "HTML",
+    });
+  } catch {
+    await ctx.api.sendMessage(
+      chatId,
+      "<b>🛒 Cart:</b>\n\nYour cart is empty.",
+      { parse_mode: "HTML" },
+    );
+  }
 }

@@ -1,14 +1,17 @@
 import { type Bot } from "grammy";
 import {
   addProductToOrder,
+  decreaseProductQuantity,
   discardDraftOrder,
   getOrCreateDraftOrder,
   getOrderItems,
   InventoryStockError,
+  removeProductFromOrder,
 } from "../db.js";
 import {
   resetCartMessageTracking,
   sendFreshCartMessage,
+  showEmptyCartMessage,
   updateCartMessage,
 } from "../views/cart-view.js";
 
@@ -81,6 +84,100 @@ export function registerCartHandlers(bot: Bot) {
       }
 
       await sendFreshCartMessage(ctx, orderId, cartItems);
+    } catch (error) {
+      await ctx.reply("Something went wrong.");
+      console.error(error);
+    }
+  });
+
+  bot.on("callback_query:data", async (ctx, next) => {
+    const data = ctx.callbackQuery.data;
+
+    if (!data.startsWith("decrease:")) {
+      await next();
+      return;
+    }
+
+    try {
+      await ctx.answerCallbackQuery();
+    } catch {
+      console.warn("Ignored an expired button press");
+      return;
+    }
+
+    const parts = data.split(":");
+    const orderId = Number(parts[1]);
+    const productId = Number(parts[2]);
+
+    if (!Number.isSafeInteger(orderId) || !Number.isSafeInteger(productId)) {
+      await ctx.reply("Invalid cart item.");
+      return;
+    }
+
+    try {
+      const decreasedItem = await decreaseProductQuantity(
+        orderId,
+        productId,
+        ctx.from.id,
+      );
+
+      if (!decreasedItem) {
+        await ctx.reply("Quantity is already 1. Use Remove to delete the item.");
+        return;
+      }
+
+      const updatedCart = await getOrderItems(orderId);
+      await updateCartMessage(ctx, orderId, updatedCart);
+    } catch (error) {
+      await ctx.reply("Something went wrong.");
+      console.error(error);
+    }
+  });
+
+  bot.on("callback_query:data", async (ctx, next) => {
+    const data = ctx.callbackQuery.data;
+
+    if (!data.startsWith("remove:")) {
+      await next();
+      return;
+    }
+
+    try {
+      await ctx.answerCallbackQuery();
+    } catch {
+      console.warn("Ignored an expired button press");
+      return;
+    }
+
+    const parts = data.split(":");
+    const orderId = Number(parts[1]);
+    const productId = Number(parts[2]);
+
+    if (!Number.isSafeInteger(orderId) || !Number.isSafeInteger(productId)) {
+      await ctx.reply("Invalid cart item.");
+      return;
+    }
+
+    try {
+      const removedItem = await removeProductFromOrder(
+        orderId,
+        productId,
+        ctx.from.id,
+      );
+
+      if (!removedItem) {
+        await ctx.reply("That item is no longer in your cart.");
+        return;
+      }
+
+      const updatedCart = await getOrderItems(orderId);
+
+      if (updatedCart.length === 0) {
+        await showEmptyCartMessage(ctx);
+        return;
+      }
+
+      await updateCartMessage(ctx, orderId, updatedCart);
     } catch (error) {
       await ctx.reply("Something went wrong.");
       console.error(error);

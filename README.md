@@ -17,6 +17,7 @@ a REST API.
 - Product catalogue loaded from PostgreSQL
 - Product stock and prices shown in Telegram
 - Transaction-safe cart quantity validation against available stock
+- Per-product cart controls for decreasing quantities and removing items
 - Existing draft-order recovery for returning customers
 - Add-to-cart buttons
 - Cart totals

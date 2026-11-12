@@ -253,6 +253,48 @@ export async function getOrderItems(orderId: number) {
   return result.rows;
 }
 
+export async function decreaseProductQuantity(
+  orderId: number,
+  productId: number,
+  telegramUserId: number,
+) {
+  const result = await pool.query(
+    `UPDATE order_items AS oi
+     SET quantity = oi.quantity - 1
+     FROM orders AS o
+     WHERE oi.order_id = o.id
+       AND oi.order_id = $1
+       AND oi.product_id = $2
+       AND o.telegram_user_id = $3
+       AND o.status = 'draft'
+       AND oi.quantity > 1
+     RETURNING oi.id`,
+    [orderId, productId, telegramUserId],
+  );
+
+  return result.rows[0];
+}
+
+export async function removeProductFromOrder(
+  orderId: number,
+  productId: number,
+  telegramUserId: number,
+) {
+  const result = await pool.query(
+    `DELETE FROM order_items AS oi
+     USING orders AS o
+     WHERE oi.order_id = o.id
+       AND oi.order_id = $1
+       AND oi.product_id = $2
+       AND o.telegram_user_id = $3
+       AND o.status = 'draft'
+     RETURNING oi.id`,
+    [orderId, productId, telegramUserId],
+  );
+
+  return result.rows[0];
+}
+
 export async function discardDraftOrder(
   orderId: number,
   telegramUserId: number,
